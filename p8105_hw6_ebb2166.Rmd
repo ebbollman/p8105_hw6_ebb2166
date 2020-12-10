@@ -13,6 +13,7 @@ library(p8105.datasets)
 library(mgcv)
 library(modelr)
 library(purrr)
+library(dplyr)
 
 knitr::opts_chunk$set(
   fig.width = 6,
@@ -193,12 +194,76 @@ birthweight_df %>%
 
 There are definitely outliers in this distribution, but most points fit within a nice cluster, so will move forward with this model.
 
+#### Step 4: Cross validation with other models
+
+First, quickly look at other proposed models. 
+
+```{r}
+main_effects_model = lm(bwt ~ blength + gaweeks, data = birthweight_df)
+
+broom::tidy(main_effects_model)
+
+main_interactions_model = lm(bwt ~ babysex * bhead * blength, data = birthweight_df)
+
+broom::tidy(main_interactions_model)
+```
+
+Next, build cross validation df. 
+
+```{r}
+cv_samp_df = 
+  crossv_mc(birthweight_df, 100) %>% 
+  mutate(train = map(train, as_tibble),
+         test = map(test, as_tibble))
+```
 
 
+```{r}
+cross_validation_df = 
+  cv_samp_df %>% 
+  mutate(
+    new_model = map(.x = train, ~lm(bwt ~ gaweeks + bhead + blength + babysex + delwt + mrace + ppbmi + smoken, data = .x)),
+    main_effects_model = map(.x = train, ~lm(bwt ~ blength + gaweeks, data = .x)),
+    main_interactions_model = map(.x = train, ~lm(bwt ~ babysex * bhead * blength, data = .x))
+  ) %>% 
+  mutate(
+    rmse_new_model = map2_dbl(.x = new_model, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_main_effects_model = map2_dbl(.x = main_effects_model, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_main_interactions_mosel = map2_dbl(.x = main_interactions_model, .y = test, ~rmse(model = .x, data = .y))
+  )
+```
+
+#### Step 5: Compare models
+
+Plot RMSE and compute averages
+
+```{r}
+cross_validation_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  ) %>% 
+  ggplot(aes(x = model, y = rmse)) + 
+  geom_violin()
+```
+
+```{r}
+cross_validation_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  ) %>% 
+  group_by(model) %>% 
+  summarise(avg_rmse = mean(rmse)) %>% 
+  knitr::kable()
+```
+
+The `new_model` created via rational, literature-based hypothesis of predictors of low birthweights performs best with the lowest rmse. Interesting, `main_interactions` also performs relatively well, but given that this model is not based off any rational hypothesis, would choose `new_model` 
 
 
-Class notes:
-
-If put interaction between variables, R will put in main effects and all two-way interactions.
-
-How to look at residuals: 
