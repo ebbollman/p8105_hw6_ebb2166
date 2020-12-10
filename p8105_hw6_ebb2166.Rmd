@@ -118,3 +118,60 @@ model_results_df %>%
 Homicides in which the victim is male generally have OR estimate <1, in that male victims of homicide are less likely to be solved by arrest compared to female victims of homicide in most cities. By contrast, male-victim homicides are more likely to be solved by arrest than female-victim homicides in Albuqurque, Stockton CA, and Fresno (OR >1).
 
 
+## Problem 2
+
+#### Step 1: Read and tidy data
+
+```{r}
+birthweight_df = 
+  read_csv("./data/birthweight.csv") %>% 
+  janitor::clean_names() %>% 
+  mutate(
+    babysex = as.factor(babysex),
+    frace = as.factor(frace),
+    malform = as.factor(malform),
+    mrace = as.factor(mrace)
+  )
+```
+
+Note: in cleaning df, recoded categorical variables to factors, but intentionally left factors numeric rather than character because the numeric factor coding made sense. There are certainly problems with using "White" as a reference group; however, literature supports worse obstetric and neonatal outcomes for Black people and other people of color. Therefore, did not want these indicator variables to be coded alphabetically in model, and other approaches (such as based on frequency) did not make sense.
+
+#### Step 2: Propose model 
+
+To work through this problem in a stepwise manner, will trial building model based off prior medical learning (as an emergency physician) and quick literature searches. Must include `gaweeks`, `bhead` and `blength` since other baby size parameters likely related to birthweight.
+
+Note: mother size incorporated using `ppbmi`. Did not include `ppwt` and `mheight` as too similar. Also, `pnumsga` felt to be too similar to `pnumlbw` so only one was used. 
+
+
+```{r}
+initial_model = lm(bwt ~ gaweeks + bhead + blength + babysex + delwt + fincome + frace + malform + momage + mrace + pnumlbw + ppbmi + smoken + wtgain, data = birthweight_df)
+
+summary(initial_model)
+
+broom::glance(initial_model)
+```
+
+Note: `pnumlbw` is NA in this model. When examining data, all observations are 0 for both `pnumlbw` and `pnumsga` so omitted these. 
+
+Non-significant variables (removed): `fincome`, `frace`, `malform`, `momage`. `wtgain` is not highly significant, so will exclude also. `mrace` only significant for Black mothers versus White mothers (as expected), but will keep entire category.
+
+```{r}
+new_model = lm(bwt ~ gaweeks + bhead + blength + babysex + delwt + mrace + ppbmi + smoken, data = birthweight_df)
+
+summary(new_model)
+
+broom::tidy(new_model) %>% 
+  select(-std.error, -statistic) %>% 
+  knitr::kable()
+```
+
+Note: removing the above variables does not change R-squared. All values remain significant in new model.
+
+
+
+
+Class notes:
+
+If put interaction between variables, R will put in main effects and all two-way interactions.
+
+How to look at residuals: 
